@@ -134,7 +134,7 @@ class MaskedAutoencoderViT(nn.Module):
         # sort noise for each sample
         # 对长度为L的随机序列进行随机排序，并保存原有序列
         # ids_shuffle：打乱的序列 ([2,0,1,4,3])
-        # ids_restore：原有的序列 ([1,2,0,4,3])
+        # ids_restore：设定的序列 ([1,2,0,4,3])
         ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
         ids_restore = torch.argsort(ids_shuffle, dim=1)
 
@@ -148,6 +148,7 @@ class MaskedAutoencoderViT(nn.Module):
         # unshuffle to get the binary mask
         mask = torch.gather(mask, dim=1, index=ids_restore)
 
+        # 返回：剩下的未被masked的tokens，mask掩码，对输入的tokens规定的序列
         return x_masked, mask, ids_restore
 
     def forward_encoder(self, x, mask_ratio):
