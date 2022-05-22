@@ -132,6 +132,9 @@ class MaskedAutoencoderViT(nn.Module):
         noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
         
         # sort noise for each sample
+        # 对长度为L的随机序列进行随机排序，并保存原有序列
+        # ids_shuffle：打乱的序列 ([2,0,1,4,3])
+        # ids_restore：原有的序列 ([1,2,0,4,3])
         ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
         ids_restore = torch.argsort(ids_shuffle, dim=1)
 
