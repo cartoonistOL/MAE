@@ -215,6 +215,7 @@ def main(args):
         drop_last=False
     )
 
+    #mixup：一个分布式增广方式
     mixup_fn = None
     mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
     if mixup_active:
@@ -241,13 +242,16 @@ def main(args):
                 print(f"Removing key {k} from pretrained checkpoint")
                 del checkpoint_model[k]
 
+        # 对pos进行插值，适应不同尺寸的任务
         # interpolate position embedding
         interpolate_pos_embed(model, checkpoint_model)
 
         # load pre-trained model
+        # 非严格加载模型参数
         msg = model.load_state_dict(checkpoint_model, strict=False)
         print(msg)
 
+        # 不加载头和全连接层的参数
         if args.global_pool:
             assert set(msg.missing_keys) == {'head.weight', 'head.bias', 'fc_norm.weight', 'fc_norm.bias'}
         else:

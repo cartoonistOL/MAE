@@ -17,7 +17,7 @@ import torch
 import util.misc as misc
 import util.lr_sched as lr_sched
 
-
+# 相当于一个优化算法
 def train_one_epoch(model: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
                     device: torch.device, epoch: int, loss_scaler,
@@ -44,6 +44,7 @@ def train_one_epoch(model: torch.nn.Module,
 
         samples = samples.to(device, non_blocking=True)
 
+        #自动混合精度计算loss
         with torch.cuda.amp.autocast():
             loss, _, _ = model(samples, mask_ratio=args.mask_ratio)
 
@@ -54,6 +55,8 @@ def train_one_epoch(model: torch.nn.Module,
             sys.exit(1)
 
         loss /= accum_iter
+
+        # 优化
         loss_scaler(loss, optimizer, parameters=model.parameters(),
                     update_grad=(data_iter_step + 1) % accum_iter == 0)
         if (data_iter_step + 1) % accum_iter == 0:

@@ -178,7 +178,9 @@ class MaskedAutoencoderViT(nn.Module):
         x = self.decoder_embed(x)
 
         # append mask tokens to sequence
+        # 计算mask_token的尺寸，用来替换被mask的patchs
         mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1] + 1 - x.shape[1], 1)
+        # 先取出不包含cls的部分，填充mask_token，然后unshuffle，然后再把cls加回去
         x_ = torch.cat([x[:, 1:, :], mask_tokens], dim=1)  # no cls token
         x_ = torch.gather(x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle
         x = torch.cat([x[:, :1, :], x_], dim=1)  # append cls token
@@ -214,12 +216,16 @@ class MaskedAutoencoderViT(nn.Module):
         loss = (pred - target) ** 2
         loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
 
+        #只计算被mask部分的loss
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
         return loss
 
     def forward(self, imgs, mask_ratio=0.75):
+        #返回 ids_restore，让decoder填充去掉的tokens。返回mask，让forward_loss计算时知道是哪些tokens被去掉
         latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
+        # 返回还原后的pred，用于计算loss
         pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
+        # 计算被mask的tokens的loss
         loss = self.forward_loss(imgs, pred, mask)
         return loss, pred, mask
 
