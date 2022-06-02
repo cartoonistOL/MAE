@@ -155,11 +155,19 @@ def main(args):
         pin_memory=args.pin_mem,
         drop_last=True,
     )
-    
+
     # define the model
     model = models_mae.__dict__[args.model](norm_pix_loss=args.norm_pix_loss)
+
     #TODO
-    # 检查模型的encoder是不是被固定了
+    # 加载预训练模型
+    checkpoint = torch.load(r"mae_finetuned_vit_large_2.pth", map_location='cpu')
+    print("Load pre-trained checkpoint from: %s" % "mae_finetuned_vit_large_2.pth")
+    checkpoint_model = checkpoint['model']
+    state_dict = model.state_dict()
+    model.load_state_dict(checkpoint_model, strict=False)
+
+
 
     model.to(device)
 

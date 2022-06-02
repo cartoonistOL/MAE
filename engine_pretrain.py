@@ -52,6 +52,13 @@ def train_one_epoch(model: torch.nn.Module,
         # 把str类型的timelist转化为tensor
         to = to_tensor()
         timestamp = to(timelist)
+
+        #TODO
+        # 检查模型的encoder是不是被固定了
+
+        # for param in model.parameters():
+        #     print(param.requires_grad)
+
         #自动混合精度计算loss
         with torch.cuda.amp.autocast():
             #TODO

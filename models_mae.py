@@ -41,7 +41,7 @@ class MaskedAutoencoderViT(nn.Module):
         self.blocks = nn.ModuleList([
             Block(embed_dim, num_heads, mlp_ratio, qkv_bias=True, qk_scale=None, norm_layer=norm_layer)
             for i in range(depth)])
-
+        #TODO
         # 冻结参数
         for param in self.parameters():
             param.requires_grad = False
@@ -58,7 +58,7 @@ class MaskedAutoencoderViT(nn.Module):
 
         self.mask_token = nn.Parameter(torch.zeros(1, 1, decoder_embed_dim))
         self.decoder_pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, decoder_embed_dim), requires_grad=False)  # fixed sin-cos embedding
-        self.decoder_time_linear = nn.Linear(timestamp_size, embed_dim, bias=True)
+        self.decoder_time_linear = nn.Linear(timestamp_size, decoder_embed_dim, bias=True)
 
         self.decoder_blocks = nn.ModuleList([
             Block(decoder_embed_dim, decoder_num_heads, mlp_ratio, qkv_bias=True, qk_scale=None, norm_layer=norm_layer)
@@ -217,8 +217,7 @@ class MaskedAutoencoderViT(nn.Module):
         if self.timestamp is not None:
             timestamp = self.decoder_time_linear(self.timestamp)
             x_ts = nn.Parameter(timestamp.unsqueeze(1).repeat(1, 196, 1))
-            # Tensor注册为可学习的参数Parameter
-            x = x + x_ts
+            x[:,1:,:] + x_ts
 
         # apply Transformer blocks
         for blk in self.decoder_blocks:
