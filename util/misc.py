@@ -119,7 +119,8 @@ class MetricLogger(object):
 
     def add_meter(self, name, meter):
         self.meters[name] = meter
-
+    #TODO
+    # 添加一个返回值timelist
     def log_every(self, iterable, print_freq, header=None):
         i = 0
         if not header:
@@ -141,9 +142,10 @@ class MetricLogger(object):
             log_msg.append('max mem: {memory:.0f}')
         log_msg = self.delimiter.join(log_msg)
         MB = 1024.0 * 1024.0
-        for obj in iterable:
+        for obj,timelist in iterable:  # iterable:Dataloader
             data_time.update(time.time() - end)
-            yield obj
+            # yield obj
+            yield obj[0],timelist # 改为返回tensor_list和time_list
             iter_time.update(time.time() - end)
             if i % print_freq == 0 or i == len(iterable) - 1:
                 eta_seconds = iter_time.global_avg * (len(iterable) - i)

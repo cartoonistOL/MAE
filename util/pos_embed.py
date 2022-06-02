@@ -34,7 +34,7 @@ def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False):
         pos_embed = np.concatenate([np.zeros([1, embed_dim]), pos_embed], axis=0)
     return pos_embed
 
-
+# 把2-D的patchs看成1-D序列
 def get_2d_sincos_pos_embed_from_grid(embed_dim, grid):
     assert embed_dim % 2 == 0
 
@@ -45,7 +45,7 @@ def get_2d_sincos_pos_embed_from_grid(embed_dim, grid):
     emb = np.concatenate([emb_h, emb_w], axis=1) # (H*W, D)
     return emb
 
-
+# 考虑patchs的2-D位置（x, y）
 def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
     """
     embed_dim: output dimension for each position
@@ -72,6 +72,7 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
 # References:
 # DeiT: https://github.com/facebookresearch/deit
 # --------------------------------------------------------
+# 图像尺寸改变时，patch_size**2*3 的值会变，所以要插值，使pos_embed 能对的上 patch_embed的size
 def interpolate_pos_embed(model, checkpoint_model):
     if 'pos_embed' in checkpoint_model:
         pos_embed_checkpoint = checkpoint_model['pos_embed']

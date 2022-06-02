@@ -15,7 +15,7 @@ import numpy as np
 import os
 import time
 from pathlib import Path
-
+import torch.utils.data
 import torch
 import torch.backends.cudnn as cudnn
 from torch.utils.tensorboard import SummaryWriter
@@ -23,7 +23,7 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
 import timm
-
+import util.dataLoader
 assert timm.__version__ == "0.3.2"  # version check
 import timm.optim.optim_factory as optim_factory
 
@@ -72,14 +72,14 @@ def get_args_parser():
                         help='epochs to warmup LR')
 
     # Dataset parameters
-    parser.add_argument('--data_path', default='/datasets01/imagenet_full_size/061417/', type=str,
+    parser.add_argument('--data_path', default='datasets', type=str,
                         help='dataset path')
 
     parser.add_argument('--output_dir', default='./output_dir',
                         help='path where to save, empty for no saving')
     parser.add_argument('--log_dir', default='./output_dir',
                         help='path where to tensorboard log')
-    parser.add_argument('--device', default='cuda',
+    parser.add_argument('--device', default='cpu',
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--resume', default='',
@@ -87,7 +87,8 @@ def get_args_parser():
 
     parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
                         help='start epoch')
-    parser.add_argument('--num_workers', default=10, type=int)
+    # parser.add_argument('--num_workers', default=10, type=int)
+    parser.add_argument('--num_workers', default=0, type=int)
     parser.add_argument('--pin_mem', action='store_true',
                         help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
     parser.add_argument('--no_pin_mem', action='store_false', dest='pin_mem')
@@ -103,6 +104,11 @@ def get_args_parser():
 
     return parser
 
+# 在优化器中过滤 requires_grad = False 的 params
+def freeze(param_groups):
+    for i in range(len(param_groups)):
+        param_groups[i]["params"] = list(filter(lambda p:p.requires_grad,param_groups[i]["params"]))
+    return param_groups
 
 def main(args):
     misc.init_distributed_mode(args)
@@ -137,14 +143,12 @@ def main(args):
         print("Sampler_train = %s" % str(sampler_train))
     else:
         sampler_train = torch.utils.data.RandomSampler(dataset_train)
-
     if global_rank == 0 and args.log_dir is not None:
         os.makedirs(args.log_dir, exist_ok=True)
         log_writer = SummaryWriter(log_dir=args.log_dir)
     else:
         log_writer = None
-
-    data_loader_train = torch.utils.data.DataLoader(
+    data_loader_train = util.dataLoader.DataLoader(
         dataset_train, sampler=sampler_train,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
@@ -154,6 +158,8 @@ def main(args):
     
     # define the model
     model = models_mae.__dict__[args.model](norm_pix_loss=args.norm_pix_loss)
+    #TODO
+    # 检查模型的encoder是不是被固定了
 
     model.to(device)
 
@@ -177,7 +183,9 @@ def main(args):
     
     # following timm: set wd as 0 for bias and norm layers
     param_groups = optim_factory.add_weight_decay(model_without_ddp, args.weight_decay)
-    optimizer = torch.optim.AdamW(param_groups, lr=args.lr, betas=(0.9, 0.95))
+
+    # 给优化函数添加过滤函数
+    optimizer = torch.optim.AdamW(freeze(param_groups), lr=args.lr, betas=(0.9, 0.95))
     print(optimizer)
     loss_scaler = NativeScaler()
 
@@ -194,7 +202,7 @@ def main(args):
             log_writer=log_writer,
             args=args
         )
-        if args.output_dir and (epoch % 20 == 0 or epoch + 1 == args.epochs):
+        if args.output_dir and (epoch % 200 == 0 or epoch + 1 == args.epochs):
             misc.save_model(
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch)

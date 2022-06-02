@@ -18,6 +18,9 @@ import util.misc as misc
 import util.lr_sched as lr_sched
 
 # 相当于一个优化算法
+from time2tensor import to_tensor
+
+
 def train_one_epoch(model: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
                     device: torch.device, epoch: int, loss_scaler,
@@ -36,17 +39,24 @@ def train_one_epoch(model: torch.nn.Module,
     if log_writer is not None:
         print('log_dir: {}'.format(log_writer.log_dir))
 
-    for data_iter_step, (samples, _) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
+    # 加载图片
+    #TODO
+    # 如果model(samples, mask_ratio=args.mask_ratio)里sample没有被打乱，就可以修改metric_logger.log_every多返回一个time_stamp，然后传到model里
+    for data_iter_step, (samples,timelist) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
 
         # we use a per iteration (instead of per epoch) lr scheduler
         if data_iter_step % accum_iter == 0:
             lr_sched.adjust_learning_rate(optimizer, data_iter_step / len(data_loader) + epoch, args)
-
         samples = samples.to(device, non_blocking=True)
-
+        #TODO
+        # 把str类型的timelist转化为tensor
+        to = to_tensor()
+        timestamp = to(timelist)
         #自动混合精度计算loss
         with torch.cuda.amp.autocast():
-            loss, _, _ = model(samples, mask_ratio=args.mask_ratio)
+            #TODO
+            # 给model的forward()传入timestamp，月份构成的tensor，如：[[12.],[11.],[[1.]]]
+            loss, _, _ = model(samples, mask_ratio=args.mask_ratio,timestamp=timestamp)  # 真正的训练,samples为(64,3,224,224)的tensor
 
         loss_value = loss.item()
 

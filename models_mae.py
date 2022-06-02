@@ -11,6 +11,7 @@
 
 from functools import partial
 
+from util.embed import *
 import torch
 import torch.nn as nn
 
@@ -24,21 +25,30 @@ class MaskedAutoencoderViT(nn.Module):
     """
     def __init__(self, img_size=224, patch_size=16, in_chans=3,
                  embed_dim=1024, depth=24, num_heads=16,
+                 timestamp_size=1,
                  decoder_embed_dim=512, decoder_depth=8, decoder_num_heads=16,
                  mlp_ratio=4., norm_layer=nn.LayerNorm, norm_pix_loss=False):
         super().__init__()
-
         # --------------------------------------------------------------------------
         # MAE encoder specifics
         self.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)
         num_patches = self.patch_embed.num_patches
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+        # 需要position embedding来编码tokens的位置信息,在随后进行sincos初始化
+        # "requires_grad=False"：不学习位置编码
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim), requires_grad=False)  # fixed sin-cos embedding
-
         self.blocks = nn.ModuleList([
             Block(embed_dim, num_heads, mlp_ratio, qkv_bias=True, qk_scale=None, norm_layer=norm_layer)
             for i in range(depth)])
+
+        # 冻结参数
+        for param in self.parameters():
+            param.requires_grad = False
+        #TODO
+        # 在冻结参数后添加一个全连接层,线性映射time到embed_dim的time_stamp
+        self.time_linear = nn.Linear(timestamp_size, embed_dim, bias=True)
+
         self.norm = norm_layer(embed_dim)
         # --------------------------------------------------------------------------
 
@@ -47,8 +57,8 @@ class MaskedAutoencoderViT(nn.Module):
         self.decoder_embed = nn.Linear(embed_dim, decoder_embed_dim, bias=True)
 
         self.mask_token = nn.Parameter(torch.zeros(1, 1, decoder_embed_dim))
-
         self.decoder_pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, decoder_embed_dim), requires_grad=False)  # fixed sin-cos embedding
+        self.decoder_time_linear = nn.Linear(timestamp_size, embed_dim, bias=True)
 
         self.decoder_blocks = nn.ModuleList([
             Block(decoder_embed_dim, decoder_num_heads, mlp_ratio, qkv_bias=True, qk_scale=None, norm_layer=norm_layer)
@@ -63,9 +73,11 @@ class MaskedAutoencoderViT(nn.Module):
         self.initialize_weights()
 
     def initialize_weights(self):
-        # initialization
         # initialize (and freeze) pos_embed by sin-cos embedding
+        # "cls_token=True" ： 输入的pos_embed比patches多一个长度，因为是先cat的cls
+        # 得到sincos编码的pos_embed(197,1024)
         pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1], int(self.patch_embed.num_patches**.5), cls_token=True)
+        # 加上batch维度 ：torch.Size([1, 197, 1024])
         self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
 
         decoder_pos_embed = get_2d_sincos_pos_embed(self.decoder_pos_embed.shape[-1], int(self.patch_embed.num_patches**.5), cls_token=True)
@@ -153,10 +165,22 @@ class MaskedAutoencoderViT(nn.Module):
 
     def forward_encoder(self, x, mask_ratio):
         # embed patches
+        # patch_embed(x) 传入时是(B,C,H,W)tensor，返回(B,196,1024)tensor
         x = self.patch_embed(x)
 
         # add pos embed w/o cls token
         x = x + self.pos_embed[:, 1:, :]
+
+        #TODO
+        # 时间编码，经过time_linear
+        # 再把timestamp从(64,1024)复制为(64,196,1024)
+        # 归一化？
+        # 套nn.Parameter()
+        if self.timestamp is not None:
+            timestamp = self.time_linear(self.timestamp)
+            x_ts = nn.Parameter(timestamp.unsqueeze(1).repeat(1,196,1))
+            # Tensor注册为可学习的参数Parameter
+            x = x +x_ts
 
         # masking: length -> length * mask_ratio
         x, mask, ids_restore = self.random_masking(x, mask_ratio)
@@ -187,6 +211,14 @@ class MaskedAutoencoderViT(nn.Module):
 
         # add pos embed
         x = x + self.decoder_pos_embed
+
+        #TODO
+        # 时间编码，经过decoder_time_linear
+        if self.timestamp is not None:
+            timestamp = self.decoder_time_linear(self.timestamp)
+            x_ts = nn.Parameter(timestamp.unsqueeze(1).repeat(1, 196, 1))
+            # Tensor注册为可学习的参数Parameter
+            x = x + x_ts
 
         # apply Transformer blocks
         for blk in self.decoder_blocks:
@@ -220,7 +252,8 @@ class MaskedAutoencoderViT(nn.Module):
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
         return loss
 
-    def forward(self, imgs, mask_ratio=0.75):
+    def forward(self, imgs, mask_ratio=0.75,timestamp=None):
+        self.timestamp = timestamp
         #返回 ids_restore，让decoder填充去掉的tokens。返回mask，让forward_loss计算时知道是哪些tokens被去掉
         latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
         # 返回还原后的pred，用于计算loss
