@@ -11,7 +11,6 @@
 
 from functools import partial
 
-from util.embed import *
 import torch
 import torch.nn as nn
 
