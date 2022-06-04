@@ -251,7 +251,7 @@ class MaskedAutoencoderViT(nn.Module):
         return loss
 
     def forward(self, imgs, mask_ratio=0.75,timestamp=None):
-        self.timestamp = timestamp
+        self.timestamp = timestamp.to(device='cuda')
         #返回 ids_restore，让decoder填充去掉的tokens。返回mask，让forward_loss计算时知道是哪些tokens被去掉
         latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
         # 返回还原后的pred，用于计算loss
