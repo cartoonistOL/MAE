@@ -79,7 +79,7 @@ def get_args_parser():
                         help='path where to save, empty for no saving')
     parser.add_argument('--log_dir', default='./output_dir',
                         help='path where to tensorboard log')
-    parser.add_argument('--device', default='cpu',
+    parser.add_argument('--device', default='cuda',
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--resume', default='',
@@ -161,11 +161,14 @@ def main(args):
 
     #TODO
     # 加载预训练模型
-    checkpoint = torch.load(r"mae_finetuned_vit_large_2.pth", map_location='cpu')
-    print("Load pre-trained checkpoint from: %s" % "mae_finetuned_vit_large_2.pth")
-    checkpoint_model = checkpoint['model']
-    state_dict = model.state_dict()
-    model.load_state_dict(checkpoint_model, strict=False)
+
+    load_pre = ""
+    load_pre = "mae_finetuned_vit_large_2.pth"
+    if load_pre:
+        checkpoint = torch.load(load_pre, map_location='cpu')
+        print("Load pre-trained checkpoint from: %s" % load_pre)
+        checkpoint_model = checkpoint['model']
+        model.load_state_dict(checkpoint_model, strict=False)
 
 
 
@@ -197,6 +200,7 @@ def main(args):
     print(optimizer)
     loss_scaler = NativeScaler()
 
+    # 断点续训
     misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
 
     print(f"Start training for {args.epochs} epochs")
@@ -210,7 +214,7 @@ def main(args):
             log_writer=log_writer,
             args=args
         )
-        if args.output_dir and (epoch % 200 == 0 or epoch + 1 == args.epochs):
+        if args.output_dir and (epoch % 20 == 0 or epoch + 1 == args.epochs):
             misc.save_model(
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch)
