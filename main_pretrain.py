@@ -79,7 +79,7 @@ def get_args_parser():
                         help='path where to save, empty for no saving')
     parser.add_argument('--log_dir', default='./output_dir',
                         help='path where to tensorboard log')
-    parser.add_argument('--device', default='cuda',
+    parser.add_argument('--device', default='cpu',
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--resume', default='',
@@ -151,7 +151,7 @@ def main(args):
     data_loader_train = util.dataLoader.DataLoader(
         dataset_train, sampler=sampler_train,
         batch_size=args.batch_size,
-        num_workers=args.num_workers,
+        num_workers=args.num_workers,   # numworker设置为0，否则就是多线程，多线程返回迭代数据还不会改
         pin_memory=args.pin_mem,
         drop_last=True,
     )
@@ -195,7 +195,8 @@ def main(args):
     # following timm: set wd as 0 for bias and norm layers
     param_groups = optim_factory.add_weight_decay(model_without_ddp, args.weight_decay)
 
-    # 给优化函数添加过滤函数
+    #TODO
+    # 给优化函数添加过滤函数freeze，滤过requires_grad = False 的 params
     optimizer = torch.optim.AdamW(freeze(param_groups), lr=args.lr, betas=(0.9, 0.95))
     print(optimizer)
     loss_scaler = NativeScaler()

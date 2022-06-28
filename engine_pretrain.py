@@ -41,17 +41,19 @@ def train_one_epoch(model: torch.nn.Module,
 
     # 加载图片
     #TODO
-    # 如果model(samples, mask_ratio=args.mask_ratio)里sample没有被打乱，就可以修改metric_logger.log_every多返回一个time_stamp，然后传到model里
-    for data_iter_step, (samples,timelist) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
-
+    # 如果model(samples, mask_ratio=args.mask_ratio)里samples没有被打乱，就可以修改metric_logger.log_every多返回一个time_stamp，然后传到model里
+    for data_iter_step, (samples,timelist,locationlist) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
+        # samples为(64,3,224,224)的tensor，timelist是新增的，返回月份，如如：[[12.],[11.],[[1.]]]
         # we use a per iteration (instead of per epoch) lr scheduler
         if data_iter_step % accum_iter == 0:
             lr_sched.adjust_learning_rate(optimizer, data_iter_step / len(data_loader) + epoch, args)
         samples = samples.to(device, non_blocking=True)
         #TODO
         # 把str类型的timelist转化为tensor
+        timelist1 = [time[4:6] for time in timelist]
         to = to_tensor()
-        timestamp = to(timelist)
+        timestamp = to(timelist1)
+        locationstamp = to(locationlist)
 
         #TODO
         # 检查模型的encoder是不是被固定了
@@ -62,8 +64,8 @@ def train_one_epoch(model: torch.nn.Module,
         #自动混合精度计算loss
         with torch.cuda.amp.autocast():
             #TODO
-            # 给model的forward()传入timestamp，月份构成的tensor，如：[[12.],[11.],[[1.]]]
-            loss, _, _ = model(samples, mask_ratio=args.mask_ratio,timestamp=timestamp)  # 真正的训练,samples为(64,3,224,224)的tensor
+            # 给model的forward()传入timestamp：月份构成的tensor，如：[[12.],[11.],[[1.]]]
+            loss, _, _ = model(samples, mask_ratio=args.mask_ratio,timestamp=timestamp,locationstamp = locationstamp)  # 真正的训练,samples为(64,3,224,224)的tensor
 
         loss_value = loss.item()
 

@@ -564,11 +564,11 @@ class _SingleProcessDataLoaderIter(_BaseDataLoaderIter):
         index = self._next_index()  # 获取一个 batchsize 大小的 index 列表
         # fetch(index)根据index获取data
         #TODO
-        # 修改fetch，根据index获取timelist
-        data,time = self._dataset_fetcher.fetch(index)  # data是一个 list，每个元素是一个 tuple，每个 tuple 包括样本和标签
+        # 修改fetch，根据index获取time
+        data,time,location = self._dataset_fetcher.fetch(index)  # data是一个 list，每个元素是一个 tuple，每个 tuple 包括样本和标签
         if self._pin_memory:
             data = _utils.pin_memory.pin_memory(data)
-        return data,time
+        return data,time,location
 
 
 class _MultiProcessingDataLoaderIter(_BaseDataLoaderIter):

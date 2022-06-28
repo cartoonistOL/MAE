@@ -24,7 +24,7 @@ class MaskedAutoencoderViT(nn.Module):
     """
     def __init__(self, img_size=224, patch_size=16, in_chans=3,
                  embed_dim=1024, depth=24, num_heads=16,
-                 timestamp_size=1,
+                 timestamp_size=1,location_size=1,
                  decoder_embed_dim=512, decoder_depth=8, decoder_num_heads=16,
                  mlp_ratio=4., norm_layer=nn.LayerNorm, norm_pix_loss=False):
         super().__init__()
@@ -46,7 +46,9 @@ class MaskedAutoencoderViT(nn.Module):
             param.requires_grad = False
         #TODO
         # 在冻结参数后添加一个全连接层,线性映射time到embed_dim的time_stamp
+        # 线性映射location到embed_dim的location_stamp
         self.time_linear = nn.Linear(timestamp_size, embed_dim, bias=True)
+        self.loc_linear = nn.Linear(location_size, embed_dim, bias=True)
 
         self.norm = norm_layer(embed_dim)
         # --------------------------------------------------------------------------
@@ -173,13 +175,16 @@ class MaskedAutoencoderViT(nn.Module):
         #TODO
         # 时间编码，经过time_linear
         # 再把timestamp从(64,1024)复制为(64,196,1024)
-        # 归一化？
-        # 套nn.Parameter()
+        # Tensor注册为可学习的参数Parameter
         if self.timestamp is not None:
             timestamp = self.time_linear(self.timestamp)
             x_ts = nn.Parameter(timestamp.unsqueeze(1).repeat(1,196,1))
-            # Tensor注册为可学习的参数Parameter
             x = x +x_ts
+
+        if self.locationstamp is not None:
+            locationstamp = self.time_linear(self.locationstamp)
+            x_ls = nn.Parameter(locationstamp.unsqueeze(1).repeat(1,196,1))
+            x = x +x_ls
 
         # masking: length -> length * mask_ratio
         x, mask, ids_restore = self.random_masking(x, mask_ratio)
@@ -218,6 +223,11 @@ class MaskedAutoencoderViT(nn.Module):
             x_ts = nn.Parameter(timestamp.unsqueeze(1).repeat(1, 196, 1))
             x[:,1:,:] + x_ts
 
+        if self.locationstamp is not None:
+            locationstamp = self.decoder_time_linear(self.locationstamp)
+            x_ls = nn.Parameter(locationstamp.unsqueeze(1).repeat(1, 196, 1))
+            x[:,1:,:] + x_ls
+
         # apply Transformer blocks
         for blk in self.decoder_blocks:
             x = blk(x)
@@ -250,8 +260,9 @@ class MaskedAutoencoderViT(nn.Module):
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
         return loss
 
-    def forward(self, imgs, mask_ratio=0.75,timestamp=None):
+    def forward(self, imgs, mask_ratio=0.75,timestamp=None,locationstamp=None):
         self.timestamp = timestamp.to(device='cuda')
+        self.locationstamp = locationstamp.to(device='cuda')
         #返回 ids_restore，让decoder填充去掉的tokens。返回mask，让forward_loss计算时知道是哪些tokens被去掉
         latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
         # 返回还原后的pred，用于计算loss
